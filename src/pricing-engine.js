@@ -14,6 +14,10 @@ export class PricingEngine {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.now = config.now || (() => Date.now());
 
+    // Ensure tiers are sorted by threshold to guarantee correct interpolation logic.
+    // If tiers are out of order, the loop in _interpolateMultiplier will return early/incorrectly.
+    this.config.tiers.sort((a, b) => a.threshold - b.threshold);
+
     // Ring buffer: fixed-size array of buckets, each counting requests in a 1-second slot
     const numBuckets = Math.ceil(this.config.windowSize / this.config.bucketSize);
     this.buckets = new Array(numBuckets).fill(0);
@@ -78,15 +82,34 @@ export class PricingEngine {
 
   /** Full status snapshot for monitoring endpoints. */
   getStatus() {
-    const demand = this.getDemand();
-    const raw = this.config.basePrice * this._interpolateMultiplier(demand);
+    this._advance();
+    const demand = this.totalRequests;
+    const multiplier = this._interpolateMultiplier(demand);
+    const raw = this.config.basePrice * multiplier;
     const smoothed = this._smooth(raw);
+
+    // Inline tier lookup — avoids second getDemand() + _interpolateMultiplier() call
+    const { tiers } = this.config;
+    let level = 0;
+    for (let i = tiers.length - 1; i >= 0; i--) {
+      if (demand >= tiers[i].threshold) {
+        level = i;
+        break;
+      }
+    }
+
     return {
       demand,
       rawPrice: raw,
       smoothedPrice: smoothed,
       formattedPrice: `$${smoothed.toFixed(6)}`,
-      tier: this.getTierInfo(),
+      tier: {
+        level,
+        name: TIER_NAMES[level] || `Tier ${level}`,
+        threshold: tiers[level].threshold,
+        multiplier,
+        demand,
+      },
       config: this.config,
     };
   }

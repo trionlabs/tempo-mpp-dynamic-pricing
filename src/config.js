@@ -11,11 +11,11 @@ export const DEFAULT_CONFIG = {
   // Demand tiers: [threshold (requests/window), multiplier]
   // Price is linearly interpolated between adjacent tiers
   tiers: [
-    { threshold: 0,    multiplier: 1.0 },
-    { threshold: 50,   multiplier: 1.5 },
-    { threshold: 200,  multiplier: 2.5 },
-    { threshold: 1000, multiplier: 5.0 },
-    { threshold: 5000, multiplier: 10.0 },
+    { threshold: 0,    multiplier: 1.0 },   // Base
+    { threshold: 50,   multiplier: 1.5 },   // Normal
+    { threshold: 200,  multiplier: 2.5 },   // Elevated
+    { threshold: 1000, multiplier: 5.0 },   // High
+    { threshold: 5000, multiplier: 10.0 },  // Surge
   ],
 
   // EMA smoothing factor, per second
