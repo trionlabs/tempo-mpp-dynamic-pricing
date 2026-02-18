@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:fast": "vite --mode fast",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "lucide-svelte": "^0.574.0",
     "svelte": "^5.0.0"
   },
   "devDependencies": {

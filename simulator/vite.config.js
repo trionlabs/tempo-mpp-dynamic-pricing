@@ -5,8 +5,16 @@ import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig({
-  plugins: [svelte()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    svelte({
+      compilerOptions: {
+        // 'dev:fast' runs vite --mode fast → skips Svelte dev proxies/checks
+        // 'dev' runs vite (mode=development) → full dev instrumentation
+        dev: mode === 'development',
+      },
+    }),
+  ],
   resolve: {
     alias: {
       '@engine': path.resolve(__dirname, '../src'),
@@ -17,4 +25,4 @@ export default defineConfig({
       allow: ['..'],
     },
   },
-});
+}));
