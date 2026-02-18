@@ -23,18 +23,18 @@ Requires Node >= 18.
 ### Server
 
 ```bash
-npm install
+pnpm install
 cp .env.example .env
 # Edit .env: set EVM_ADDRESS to your wallet
-npm start
+pnpm start
 ```
 
 ### Simulator
 
 ```bash
 cd simulator
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 Opens a dashboard at `localhost:5173` with demand pattern controls (organic, spike, flood, decay), live time-series charts, pricing curve visualization, and adjustable tier thresholds.
@@ -111,7 +111,7 @@ Constructor accepts an optional config object. Any omitted fields fall back to d
 ## Tests
 
 ```bash
-npm test
+pnpm test
 ```
 
 26 tests across 5 suite for demand tracking, tier interpolation, EMA smoothing, output formats, and edge cases. Uses Node's built-in `node:test`, no test framework dependency.
