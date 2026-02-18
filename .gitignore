@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env
 *.log
+.claude/
+REPORT.md
+check_rounding.py
+simulator/simulate.py
