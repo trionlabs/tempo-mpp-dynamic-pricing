@@ -1,25 +1,31 @@
 <script>
-  import precomputedData from './precomputed.json';
+  import precomputedData from "./precomputed.json";
 
-  let { scenarios = [], activeItemId, currentStats = null, simulatedSeconds = 0, config } = $props();
+  let {
+    scenarios = [],
+    activeItemId,
+    currentStats = null,
+    simulatedSeconds = 0,
+    config,
+  } = $props();
 
-  const precomputed = Object.fromEntries(precomputedData.map(d => [d.id, d]));
+  const precomputed = Object.fromEntries(precomputedData.map((d) => [d.id, d]));
 
-  let activeTab = $state('all');
+  let activeTab = $state("all");
 
   // Build tab definitions from scenario data
   let tabs = $derived.by(() => {
-    const result = [{ id: 'all', label: 'All' }];
+    const result = [{ id: "all", label: "All" }];
 
-    const hasPrimitives = scenarios.some(s => s.type === 'primitive');
+    const hasPrimitives = scenarios.some((s) => s.type === "primitive");
     if (hasPrimitives) {
-      result.push({ id: 'patterns', label: 'Patterns' });
+      result.push({ id: "patterns", label: "Patterns" });
     }
 
     // Collect unique durations from scenarios, sorted
     const durations = new Map();
     for (const s of scenarios) {
-      if (s.type === 'scenario') {
+      if (s.type === "scenario") {
         const dur = s.simulatedDuration;
         const label = dur >= 3600 ? `${dur / 3600}h` : `${dur / 60}m`;
         if (!durations.has(dur)) {
@@ -30,8 +36,8 @@
     }
 
     const sorted = [...durations.values()].sort((a, b) => {
-      const aDur = parseInt(a.id.split('-')[1]);
-      const bDur = parseInt(b.id.split('-')[1]);
+      const aDur = parseInt(a.id.split("-")[1]);
+      const bDur = parseInt(b.id.split("-")[1]);
       return aDur - bDur;
     });
 
@@ -44,35 +50,39 @@
 
   // Filter scenarios based on active tab
   let filteredItems = $derived.by(() => {
-    if (activeTab === 'all') return scenarios;
-    if (activeTab === 'patterns') return scenarios.filter(s => s.type === 'primitive');
+    if (activeTab === "all") return scenarios;
+    if (activeTab === "patterns")
+      return scenarios.filter((s) => s.type === "primitive");
 
     // Duration tab: "dur-3600" etc
-    const durSeconds = parseInt(activeTab.split('-')[1]);
-    return scenarios.filter(s => s.type === 'scenario' && s.simulatedDuration === durSeconds);
+    const durSeconds = parseInt(activeTab.split("-")[1]);
+    return scenarios.filter(
+      (s) => s.type === "scenario" && s.simulatedDuration === durSeconds,
+    );
   });
 
   // Format helpers
   const fmtRev = (n) => {
-    if (n == null) return '-';
+    if (n == null) return "-";
     if (n >= 1) return `$${n.toFixed(2)}`;
     if (n >= 0.01) return `$${n.toFixed(4)}`;
     return `$${n.toFixed(6)}`;
   };
-  const fmtPct = (n) => n != null ? `${n > 0 ? '+' : ''}${n.toFixed(0)}%` : '-';
+  const fmtPct = (n) =>
+    n != null ? `${n > 0 ? "+" : ""}${n.toFixed(0)}%` : "-";
 
   function getElasticityLabel(e) {
-    if (e === 0) return 'None';
-    if (e <= 0.5) return 'Low';
-    if (e <= 1.0) return 'Med';
-    if (e <= 1.2) return 'High';
-    return 'V.High';
+    if (e === 0) return "None";
+    if (e <= 0.5) return "Low";
+    if (e <= 1.0) return "Med";
+    if (e <= 1.2) return "High";
+    return "V.High";
   }
 
   function getElasticityLevel(e) {
-    if (e === 0) return 'none';
-    if (e >= 1.0) return 'high';
-    return 'low';
+    if (e === 0) return "none";
+    if (e >= 1.0) return "high";
+    return "low";
   }
 </script>
 
@@ -87,7 +97,7 @@
       <button
         class="tab"
         class:active={activeTab === tab.id}
-        onclick={() => activeTab = tab.id}
+        onclick={() => (activeTab = tab.id)}
       >
         {tab.label}
         {#if tab.count}<span class="tab-count">{tab.count}</span>{/if}
@@ -99,13 +109,39 @@
     <table>
       <thead>
         <tr>
-          <th class="col-name" data-tip="Traffic pattern and simulated duration">Scenario</th>
-          <th class="col-tag" data-tip="Price sensitivity of users. E>1 = elastic (users leave when price rises). E<1 = sticky (users tolerate higher prices). E=0 = bots (price-insensitive).">Elasticity</th>
-          <th class="col-metric" data-tip="Revenue with dynamic pricing AND market elasticity. Users leave as price rises, reducing realized demand.">Dynamic + El</th>
-          <th class="col-metric col-primary" data-tip="Revenue with dynamic pricing but NO elasticity. All potential demand is served. This is the theoretical maximum for dynamic pricing.">Dynamic Pricing</th>
-          <th class="col-metric" data-tip="Revenue if price stayed flat at base price ($0.001). All potential demand served at fixed rate.">Static Pricing</th>
-          <th class="col-metric" data-tip="Average price paid per request. Percentage shows how much higher than the base price.">Avg Price</th>
-          <th class="col-metric" data-tip="Percentage difference between Dynamic+El revenue and Static Pricing revenue.">Revenue Change</th>
+          <th class="col-name" data-tip="Traffic pattern and simulated duration"
+            >Scenario</th
+          >
+          <th
+            class="col-tag"
+            data-tip="Price sensitivity of users. E>1 = elastic (users leave when price rises). E<1 = sticky (users tolerate higher prices). E=0 = bots (price-insensitive)."
+            >Elasticity</th
+          >
+          <th
+            class="col-metric"
+            data-tip="Revenue with dynamic pricing AND market elasticity. Users leave as price rises, reducing realized demand."
+            >Dynamic + El</th
+          >
+          <th
+            class="col-metric col-primary"
+            data-tip="Revenue with dynamic pricing but NO elasticity. All potential demand is served. This is the theoretical maximum for dynamic pricing."
+            >Dynamic Pricing</th
+          >
+          <th
+            class="col-metric"
+            data-tip="Revenue if price stayed flat at base price ($0.001). All potential demand served at fixed rate."
+            >Static Pricing</th
+          >
+          <th
+            class="col-metric"
+            data-tip="Average price paid per request. Percentage shows how much higher than the base price."
+            >Avg Price</th
+          >
+          <th
+            class="col-metric"
+            data-tip="Percentage difference between Dynamic (Theoretical) revenue and Static Pricing revenue. Reflects potential uplift ignoring demand loss due to price sensitivity."
+            >Revenue Change</th
+          >
         </tr>
       </thead>
       <tbody>
@@ -120,16 +156,23 @@
           {@const reqs = live ? currentStats.requests : pre.requests}
 
           {@const avgPrice = reqs > 0 ? dRev / reqs : 0}
-          {@const avgPricePct = (reqs > 0 && config.basePrice > 0) ? ((avgPrice - config.basePrice) / config.basePrice) * 100 : 0}
-          {@const perfPct = sRev > 0 ? ((dRev - sRev) / sRev) * 100 : 0}
+          {@const avgPricePct =
+            reqs > 0 && config.basePrice > 0
+              ? ((avgPrice - config.basePrice) / config.basePrice) * 100
+              : 0}
+          {@const perfPct = sRev > 0 ? ((gRev - sRev) / sRev) * 100 : 0}
           {@const e = item.marketProfile?.baseElasticity ?? 0}
 
           <tr class:active-row={isActive}>
             <td class="col-name">
               {#if isActive}<span class="indicator">●</span>{/if}
               {item.name}
-              {#if item.type === 'scenario'}
-                <span class="duration-badge">{item.simulatedDuration >= 3600 ? `${item.simulatedDuration/3600}h` : `${item.simulatedDuration/60}m`}</span>
+              {#if item.type === "scenario"}
+                <span class="duration-badge"
+                  >{item.simulatedDuration >= 3600
+                    ? `${item.simulatedDuration / 3600}h`
+                    : `${item.simulatedDuration / 60}m`}</span
+                >
               {/if}
             </td>
 
@@ -153,12 +196,20 @@
 
             <td class="col-metric highlight">
               {fmtRev(avgPrice)}
-              <span class="avg-price-pct" class:text-green={avgPricePct > 0} class:text-red={avgPricePct < 0}>
+              <span
+                class="avg-price-pct"
+                class:text-green={avgPricePct > 0}
+                class:text-red={avgPricePct < 0}
+              >
                 ({fmtPct(avgPricePct)})
               </span>
             </td>
 
-            <td class="col-metric bold" class:text-green={perfPct > 0} class:text-red={perfPct < 0}>
+            <td
+              class="col-metric bold"
+              class:text-green={perfPct > 0}
+              class:text-red={perfPct < 0}
+            >
               {fmtPct(perfPct)}
             </td>
           </tr>
@@ -246,9 +297,14 @@
   }
 
   /* ===== Table ===== */
-  .table-container { overflow-x: auto; }
+  .table-container {
+    overflow-x: auto;
+  }
 
-  table { width: 100%; border-collapse: collapse; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
 
   th {
     text-align: right;
@@ -261,7 +317,10 @@
     border-bottom: 0.5px solid var(--border);
     white-space: nowrap;
   }
-  th.col-name, th.col-tag { text-align: left; }
+  th.col-name,
+  th.col-tag {
+    text-align: left;
+  }
 
   /* Primary column header emphasis */
   th.col-primary {
@@ -321,9 +380,13 @@
     font-size: 0.55rem;
     white-space: nowrap;
   }
-  td.col-tag { text-align: left; }
+  td.col-tag {
+    text-align: left;
+  }
 
-  tr:last-child td { border-bottom: none; }
+  tr:last-child td {
+    border-bottom: none;
+  }
 
   /* Active Row */
   tr.active-row td {
@@ -346,10 +409,18 @@
     margin-left: 4px;
   }
 
-  .bold { font-weight: 600; }
-  .muted { opacity: 0.4; }
-  .dim { opacity: 0.5; }
-  .highlight { color: var(--accent-light); }
+  .bold {
+    font-weight: 600;
+  }
+  .muted {
+    opacity: 0.4;
+  }
+  .dim {
+    opacity: 0.5;
+  }
+  .highlight {
+    color: var(--accent-light);
+  }
 
   /* Primary column cell emphasis */
   .col-primary-cell {
@@ -362,8 +433,12 @@
     opacity: 0.8;
   }
 
-  .text-green { color: #98a886; }
-  .text-red { color: #f87171; }
+  .text-green {
+    color: #98a886;
+  }
+  .text-red {
+    color: #f87171;
+  }
 
   .tag {
     padding: 1px 4px;
@@ -378,12 +453,24 @@
     min-width: 30px;
     text-align: center;
   }
-  .tag[data-level="none"] { color: var(--text-dim); opacity: 0.7; }
-  .tag[data-level="high"] { color: var(--accent); border-color: var(--border-hover); }
+  .tag[data-level="none"] {
+    color: var(--text-dim);
+    opacity: 0.7;
+  }
+  .tag[data-level="high"] {
+    color: var(--accent);
+    border-color: var(--border-hover);
+  }
 
   @keyframes pulse {
-    0% { opacity: 0.4; }
-    50% { opacity: 1; }
-    100% { opacity: 0.4; }
+    0% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0.4;
+    }
   }
 </style>

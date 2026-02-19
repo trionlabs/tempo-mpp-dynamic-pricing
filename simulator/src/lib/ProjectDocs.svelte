@@ -86,7 +86,7 @@
     </div>
     <div class="card-body">
       <p class="summary">
-        Simulation governed by <strong>Elasticity of Demand ($E_d$)</strong>.
+        Simulation governed by <strong>Elasticity of Demand (E<sub>d</sub>)</strong>.
       </p>
 
       <div class="actor-list">
