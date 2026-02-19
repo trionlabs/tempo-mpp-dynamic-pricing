@@ -39,6 +39,8 @@ pnpm dev
 
 Opens a dashboard at `localhost:5173` with demand pattern controls (organic, spike, flood, decay), live time-series charts, pricing curve visualization, and adjustable tier thresholds.
 
+![Super Bowl Simulation](./superbowl-simulation.webp)
+
 The simulator runs its own `PricingEngine` instance with synthetic demand, it doesn't connect to the live server. Use `GET /pricing/status` for production monitoring.
 
 ## The x402 integration point
