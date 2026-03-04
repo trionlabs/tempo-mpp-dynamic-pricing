@@ -6,3 +6,4 @@ dist/
 REPORT.md
 check_rounding.py
 simulator/simulate.py
+.DS_Store

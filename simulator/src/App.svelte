@@ -282,8 +282,8 @@
     <div class="header-left">
       <div class="header-badge"><span>x402</span></div>
       <div class="header-text">
-        <h1>Dynamic Pricing</h1>
-        <p class="subtitle">Real-time demand-based surge pricing simulator</p>
+        <h1>x402 + Dynamic Pricing</h1>
+        <p class="subtitle">Pay-per-request, priced by demand</p>
       </div>
     </div>
     <button class="theme-toggle" onclick={toggleTheme} title="Toggle theme">
@@ -323,18 +323,15 @@
         <span class="stat-unit">of {simulatedDurationFormatted}</span>
       </div>
     {/if}
-    <div class="stat-cell">
+    <div class="stat-cell revenue-cell">
       <span class="stat-label">Revenue</span>
-      <span class="stat-value revenue">{formatRevenue(totalRevenue)}</span>
-      <span class="stat-unit">
-        {#if Math.abs(revenueDeltaPct) >= 1}
-          <span class="revenue-delta" class:positive={revenueDeltaPct > 0} class:negative={revenueDeltaPct < 0}>
-            {revenueDeltaPct > 0 ? '+' : ''}{revenueDeltaPct.toFixed(0)}% vs flat
-          </span>
-        {:else}
-          {formatRevenue(revenuePerHour)} / hr
-        {/if}
-      </span>
+      <div class="revenue-row">
+        <span class="stat-value revenue">{formatRevenue(totalRevenue)}</span>
+        <span class="revenue-delta" class:positive={revenueDeltaPct > 0.5} class:negative={revenueDeltaPct < -0.5} class:neutral={Math.abs(revenueDeltaPct) <= 0.5}>
+          {revenueDeltaPct > 0 ? '+' : ''}{Math.abs(revenueDeltaPct) >= 1 ? revenueDeltaPct.toFixed(0) : revenueDeltaPct.toFixed(1)}%
+        </span>
+      </div>
+      <span class="stat-unit">{formatRevenue(revenuePerHour)} / hr</span>
     </div>
   </section>
 
@@ -355,7 +352,7 @@
 
   <section class="charts">
     <div class="chart-container">
-      <h2>Demand & Price</h2>
+      <h2>More Traffic → Higher Price</h2>
       <TimeSeriesChart {history} {theme} />
     </div>
     <div class="chart-container">

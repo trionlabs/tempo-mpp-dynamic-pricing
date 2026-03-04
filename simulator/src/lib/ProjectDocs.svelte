@@ -121,10 +121,6 @@
           </div>
         </div>
       </div>
-      
-      <p class="quote">
-        "Find the fair market price for compute in real-time."
-      </p>
     </div>
   </div>
 
@@ -318,15 +314,6 @@
     border-radius: 3px;
   }
 
-  .quote {
-    font-style: italic;
-    opacity: 0.5;
-    text-align: center;
-    margin-top: auto;
-    font-size: 0.45rem;
-    border-top: 0.5px dashed var(--border);
-    padding-top: 0.5rem;
-  }
 
   @media (max-width: 768px) {
     .docs-grid { grid-template-columns: 1fr; }
