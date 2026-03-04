@@ -46,8 +46,8 @@ export const PRIMITIVES = [
     icon: 'M1 7Q3.5 2,6 6Q8.5 10,11 5',
     marketProfile: { baseElasticity: 1.2 },
     traffic(t) {
-      // ~0-0.3 req/tick → 0-90 req/window → Base/Normal
-      return Math.max(0, Math.round(0.15 + 0.15 * Math.sin(t / 4000) + (random() - 0.5) * 0.3));
+      // ~0.5-1.5 req/tick → 0-90 req/window → Base/Normal
+      return Math.max(0, Math.round(0.8 + 0.5 * Math.sin(t / 4000) + (random() - 0.5) * 0.6));
     },
   },
   {

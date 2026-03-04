@@ -1,5 +1,7 @@
-// A simple seedable linear congruential generator (LCG)
-// Ensures scenarios are deterministic (replayable)
+// Seedable linear congruential generator (LCG) for deterministic replays.
+// Uses glibc constants (a=1103515245, c=12345, m=2^31).
+// Math.imul avoids float64 precision loss that normal multiplication would cause
+// (1103515245 * seed can exceed Number.MAX_SAFE_INTEGER).
 let _seed = 123456789;
 
 export function setSeed(s) {
@@ -7,8 +9,7 @@ export function setSeed(s) {
 }
 
 export function random() {
-  // LCG constants (same as glibc)
-  _seed = (1103515245 * _seed + 12345) % 2147483648;
+  _seed = (Math.imul(1103515245, _seed) + 12345) & 0x7fffffff;
   return _seed / 2147483648;
 }
 

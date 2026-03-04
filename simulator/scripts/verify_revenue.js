@@ -1,115 +1,127 @@
+import { writeFileSync } from 'node:fs';
 import { PricingEngine } from '../../src/pricing-engine.js';
-import { SCENARIOS, PLAYBACK_SECONDS } from '../src/lib/scenarios.js';
+import { DEFAULT_CONFIG } from '../../src/config.js';
+import { ALL_TRAFFIC_ITEMS, PLAYBACK_SECONDS } from '../src/lib/scenarios.js';
 import { setSeed } from '../src/lib/random.js';
 
-// Configuration mirroring App.svelte
 const TICK_MS = 200;
-const DEFAULT_CONFIG = {
-    windowSize: 60,
-    bucketSize: 1,
-    basePrice: 0.001,
-    tiers: [
-        { threshold: 0, multiplier: 1.0 },    // Tier 1: Base
-        { threshold: 50, multiplier: 1.5 },   // Tier 2: Normal
-        { threshold: 200, multiplier: 2.5 },  // Tier 3: Elevated
-        { threshold: 1000, multiplier: 5.0 }, // Tier 4: High
-        { threshold: 5000, multiplier: 25.0 } // Tier 5: Surge
-    ],
-    smoothingAlpha: 0.05
-};
 
-function calculateRealizedDemand(potential, price, profile, basePrice) {
+function calculateRealizedDemand(potential, price, profile, basePrice, elasticityEnabled) {
+    if (!elasticityEnabled) return potential;
     if (!profile || profile.baseElasticity === 0) return potential;
-    if (price <= 0) return potential; // Safety
+    if (price <= 0) return potential;
 
-    const referencePrice = basePrice;
-    const priceRatio = price / referencePrice;
-
-    // Demand curve: D = D0 * (P/P0)^-E
+    const priceRatio = price / basePrice;
     let demandMultiplier = Math.pow(priceRatio, -profile.baseElasticity);
-
-    // Clamp multiplier: Max 1.5x boost, Min 0.05x
     demandMultiplier = Math.max(0.05, Math.min(demandMultiplier, 1.5));
-
     return Math.round(potential * demandMultiplier);
 }
 
-console.log("Starting Verification Simulation...\n");
-console.log(`${"Scenario".padEnd(20)} | ${"Profile".padEnd(10)} | ${"Static Rev".padEnd(12)} | ${"Dyn (Real)".padEnd(12)} | ${"Dyn (Ghost)".padEnd(12)} | ${"Rev Change %".padEnd(12)}`);
-console.log("-".repeat(90));
+// Precomputed data matches the simulator's default: elasticity OFF
+const ELASTICITY_ENABLED = false;
 
-SCENARIOS.forEach(scenario => {
-    // Reset Simulation State
+function simulateItem(item) {
     setSeed(123456789);
-    let simulatedClockMs = 0;
-    let totalRevenue = 0;       // Realized Dynamic Revenue
-    let potentialRevenue = 0;   // Ghost/Potential Dynamic Revenue
-    let staticRevenue = 0;      // Static Revenue
 
-    // Setup Engines
-    // Logic from App.svelte createEngine:
-    let timeScale = scenario.simulatedDuration / PLAYBACK_SECONDS;
+    const isScenario = item.type === 'scenario';
+    const simulatedDuration = isScenario ? item.simulatedDuration : 60; // primitives: 60s wall-clock
+    const timeScale = isScenario ? simulatedDuration / PLAYBACK_SECONDS : 1;
+
     let adjustedConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 
-    const simMsPerTick = TICK_MS * timeScale;
-    const ticksInWindow = (adjustedConfig.windowSize * 1000) / simMsPerTick;
-
-    if (ticksInWindow < 5) {
-        const newWindowS = (5 * simMsPerTick) / 1000;
-        adjustedConfig.windowSize = newWindowS;
-        adjustedConfig.bucketSize = Math.max(1, Math.ceil(newWindowS / 60));
+    if (isScenario) {
+        const simMsPerTick = TICK_MS * timeScale;
+        const ticksInWindow = (adjustedConfig.windowSize * 1000) / simMsPerTick;
+        if (ticksInWindow < 5) {
+            const newWindowS = (5 * simMsPerTick) / 1000;
+            adjustedConfig.windowSize = newWindowS;
+            adjustedConfig.bucketSize = Math.max(1, Math.ceil(newWindowS / 60));
+        }
     }
 
-    // Mock 'now' function for engine
-    const nowFn = () => simulatedClockMs;
+    let clockMs = 0;
+    const nowFn = () => clockMs;
 
     const engine = new PricingEngine({ ...adjustedConfig, now: nowFn });
     const potentialEngine = new PricingEngine({ ...adjustedConfig, now: nowFn });
 
-    // Simulation Loop
-    let running = true;
-    while (running) {
-        let progress = Math.min(1, simulatedClockMs / (scenario.simulatedDuration * 1000));
+    let totalRevenue = 0;
+    let potentialRevenue = 0;
+    let staticRevenue = 0;
+    let realizedReqsTotal = 0;
+    let potentialReqsTotal = 0;
 
-        // Advance time
-        simulatedClockMs += TICK_MS * timeScale;
+    const totalTicks = Math.ceil((PLAYBACK_SECONDS * 1000) / TICK_MS); // 300 ticks
 
-        if (progress >= 1.0) {
-            running = false;
-            break;
-        }
+    for (let tick = 0; tick < totalTicks; tick++) {
+        // Advance clock first, then compute progress — matches App.svelte ordering
+        // (Svelte $derived recomputes after state mutation, so progress uses post-increment clock)
+        clockMs += TICK_MS * timeScale;
 
-        // Get Traffic
-        const potentialReqs = scenario.traffic(progress);
+        const progress = isScenario
+            ? Math.min(1, clockMs / (simulatedDuration * 1000))
+            : undefined;
 
-        // 1. Calculate Realized (Elastic)
+        if (isScenario && progress >= 1.0) break;
+
+        const potentialReqs = isScenario ? item.traffic(progress) : item.traffic(clockMs);
+
+        // Capture prices BEFORE recording demand — price at decision time
         const currentPrice = engine.getCurrentPrice();
-        const realizedReqs = calculateRealizedDemand(potentialReqs, currentPrice, scenario.marketProfile, DEFAULT_CONFIG.basePrice);
+        const ghostPrice = potentialEngine.getCurrentPrice();
+        const realizedReqs = calculateRealizedDemand(potentialReqs, currentPrice, item.marketProfile, DEFAULT_CONFIG.basePrice, ELASTICITY_ENABLED);
 
+        // Record demand after pricing
         engine.recordRequest(realizedReqs);
-        const s = engine.getStatus();
-        totalRevenue += realizedReqs * s.smoothedPrice;
-
-        // 2. Calculate Potential (Ghost/Inelastic)
         potentialEngine.recordRequest(potentialReqs);
-        const ps = potentialEngine.getStatus();
-        potentialRevenue += potentialReqs * ps.smoothedPrice;
 
-        // 3. Calculate Static
+        totalRevenue += realizedReqs * currentPrice;
+        potentialRevenue += potentialReqs * ghostPrice;
         staticRevenue += potentialReqs * DEFAULT_CONFIG.basePrice;
+        realizedReqsTotal += realizedReqs;
+        potentialReqsTotal += potentialReqs;
     }
 
-    // Metrics
-    const revenueChangePct = staticRevenue > 0 ? ((potentialRevenue - staticRevenue) / staticRevenue) * 100 : 0;
+    const avgPrice = realizedReqsTotal > 0 ? totalRevenue / realizedReqsTotal : 0;
+    const avgPricePct = realizedReqsTotal > 0 && DEFAULT_CONFIG.basePrice > 0
+        ? ((avgPrice - DEFAULT_CONFIG.basePrice) / DEFAULT_CONFIG.basePrice) * 100 : 0;
+    const revChangeVsStatic = staticRevenue > 0 ? ((potentialRevenue - staticRevenue) / staticRevenue) * 100 : 0;
 
+    return {
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        simulatedDuration,
+        elasticity: item.marketProfile?.baseElasticity ?? 0,
+        staticRev: staticRevenue,
+        dynamicRev: totalRevenue,
+        potentialRev: potentialRevenue,
+        requests: realizedReqsTotal,
+        potentialRequests: potentialReqsTotal,
+        avgPrice,
+        avgPricePct,
+        revChangeVsStatic,
+    };
+}
+
+// Run all simulations
+console.log("Simulating all traffic items...\n");
+
+const results = ALL_TRAFFIC_ITEMS.map(item => {
+    const r = simulateItem(item);
+    const revPct = r.revChangeVsStatic;
     console.log(
-        `${scenario.name.padEnd(20)} | ` +
-        `${(scenario.marketProfile?.baseElasticity || 0).toString().padEnd(10)} | ` +
-        `$${staticRevenue.toFixed(2).padEnd(11)} | ` +
-        `$${totalRevenue.toFixed(2).padEnd(11)} | ` +
-        `$${potentialRevenue.toFixed(2).padEnd(11)} | ` +
-        `${(revenueChangePct >= 0 ? "+" : "")}${revenueChangePct.toFixed(2)}%`
+        `${r.name.padEnd(20)} | ` +
+        `E=${r.elasticity.toString().padEnd(4)} | ` +
+        `Static $${r.staticRev.toFixed(2).padEnd(10)} | ` +
+        `Dynamic $${r.dynamicRev.toFixed(2).padEnd(10)} | ` +
+        `Potential $${r.potentialRev.toFixed(2).padEnd(10)} | ` +
+        `${(revPct >= 0 ? "+" : "")}${revPct.toFixed(2)}%`
     );
+    return r;
 });
 
-console.log("\nVerification Complete.");
+// Write precomputed.json
+const outPath = new URL('../src/lib/precomputed.json', import.meta.url);
+writeFileSync(outPath, JSON.stringify(results, null, 2) + '\n');
+console.log(`\nWrote ${outPath.pathname}`);

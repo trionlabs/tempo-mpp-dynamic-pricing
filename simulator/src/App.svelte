@@ -33,7 +33,7 @@
   let accumulatedRealizedReqs = $state(0);
   let accumulatedPotentialReqs = $state(0);
   let theme = $state('dark'); // 'dark' or 'light'
-  let elasticityEnabled = $state(true);
+  let elasticityEnabled = $state(false);
   let showExplanation = $state(false);
 
   let isScenario = $derived(activeItem.type === 'scenario');
@@ -123,23 +123,21 @@
 
       const potentialReqs = activeItem.traffic(progress);
 
-      // Calculate realized demand based on current price
+      // Capture prices BEFORE recording demand — this is the price users see at decision time
       const currentPrice = engine.getCurrentPrice();
+      const ghostPrice = potentialEngine.getCurrentPrice();
       const realizedReqs = calculateRealizedDemand(potentialReqs, currentPrice, marketProfile);
 
+      // Record demand after pricing
       engine.recordRequest(realizedReqs);
       potentialEngine.recordRequest(potentialReqs);
 
       const s = engine.getStatus();
-      const ps = potentialEngine.getStatus(); // Ghost status
 
       status = s;
-      totalRevenue += realizedReqs * s.smoothedPrice;
-      stableRevenue += potentialReqs * config.basePrice; // Static = all potential demand at flat price
-
-      // Potential Revenue = Potential Requests * Potential (Ghost) Price
-      // This represents "What if no one left?"
-      potentialRevenue += potentialReqs * ps.smoothedPrice;
+      totalRevenue += realizedReqs * currentPrice;
+      stableRevenue += potentialReqs * config.basePrice;
+      potentialRevenue += potentialReqs * ghostPrice;
 
       accumulatedRealizedReqs += realizedReqs;
       accumulatedPotentialReqs += potentialReqs;
@@ -151,19 +149,21 @@
 
       const potentialReqs = activeItem.traffic(elapsed);
 
+      // Capture prices BEFORE recording demand
       const currentPrice = engine.getCurrentPrice();
+      const ghostPrice = potentialEngine.getCurrentPrice();
       const realizedReqs = calculateRealizedDemand(potentialReqs, currentPrice, marketProfile);
 
+      // Record demand after pricing
       engine.recordRequest(realizedReqs);
       potentialEngine.recordRequest(potentialReqs);
 
       const s = engine.getStatus();
-      const ps = potentialEngine.getStatus();
 
       status = s;
-      totalRevenue += realizedReqs * s.smoothedPrice;
-      stableRevenue += potentialReqs * config.basePrice; // Static = all potential demand at flat price
-      potentialRevenue += potentialReqs * ps.smoothedPrice;
+      totalRevenue += realizedReqs * currentPrice;
+      stableRevenue += potentialReqs * config.basePrice;
+      potentialRevenue += potentialReqs * ghostPrice;
 
       accumulatedRealizedReqs += realizedReqs;
       accumulatedPotentialReqs += potentialReqs;
