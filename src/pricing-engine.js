@@ -80,13 +80,13 @@ export class PricingEngine {
     };
   }
 
-  /** Full status snapshot for monitoring endpoints. */
+  /** Full status snapshot for monitoring endpoints. Read-only — does not mutate EMA state. */
   getStatus() {
     this._advance();
     const demand = this.totalRequests;
     const multiplier = this._interpolateMultiplier(demand);
     const raw = this.config.basePrice * multiplier;
-    const smoothed = this._smooth(raw);
+    const smoothed = this._peekSmooth(raw);
 
     // Inline tier lookup — avoids second getDemand() + _interpolateMultiplier() call
     const { tiers } = this.config;
@@ -167,6 +167,19 @@ export class PricingEngine {
     }
 
     return tiers[tiers.length - 1].multiplier;
+  }
+
+  /**
+   * Non-mutating EMA peek — returns what the smoothed price would be without updating state.
+   * Used by getStatus() so monitoring/polling doesn't affect pricing.
+   */
+  _peekSmooth(rawPrice) {
+    if (this.smoothedPrice === null) return rawPrice;
+
+    const elapsedSec = (this.now() - this.lastPriceTime) / 1000;
+    const alpha = this.config.smoothingAlpha;
+    const effectiveAlpha = 1 - Math.pow(1 - alpha, elapsedSec);
+    return effectiveAlpha * rawPrice + (1 - effectiveAlpha) * this.smoothedPrice;
   }
 
   /**
