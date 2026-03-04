@@ -37,13 +37,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// Record demand on every request to /api/* before x402 payment check.
+// Record demand on EVERY request to /api/* — including unpaid 402 attempts.
+// This ensures pricing reflects true inbound pressure (DDoS, bots, retries all count).
+// Must run BEFORE paymentMiddleware so demand is recorded even when payment fails.
 app.use('/api', (req, res, next) => {
   pricingEngine.recordRequest();
   next();
 });
 
-// x402 payment middleware with dynamic pricing callback
+// x402 payment middleware with dynamic pricing callback.
+// The price() callback is lazy — it reads the current (post-record) price when evaluated.
 app.use(
   paymentMiddleware(
     {
