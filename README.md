@@ -1,10 +1,27 @@
-# x402 Dynamic Pricing
+# MPP Dynamic Pricing
 
-Demand-based surge pricing for the [x402](https://github.com/coinbase/x402) payment protocol. Built on x402 V2's dynamic pricing callback. Instead of a static `amount` in payment requirements, V2 lets the server provide a function evaluated per-request. This project plugs a real-time demand tracker into that callback.
+**[Tempo Hackathon](https://hackathon.tempo.xyz/) submission** | **[Live Demo](https://mpp-dynamic-pricing.0x471.workers.dev)**
+
+An AI inference gateway where machines pay machines for intelligence. Cloudflare Workers AI serves LLM completions and embeddings behind [MPP](https://mpp.dev) payments with real-time demand-based surge pricing. More agents requesting completions simultaneously? The price climbs.
 
 ## How it works
 
-A sliding window (60 seconds, ring buffer of 1-second buckets) counts incoming requests. The count maps to a 5-tier piecewise pricing curve with linear interpolation between tier boundaries. An EMA smoother prevents price jitter from short bursts.
+```
+Agent ──POST /api/chat──▶ Worker ──402 + surge price──▶ Agent pays via Tempo
+                                                              │
+Agent ◀──AI completion + Payment-Receipt──◀ Workers AI ◀──────┘
+```
+
+1. Agent requests `/api/chat` with messages
+2. Worker returns `402 Payment Required` with the current surge price
+3. Agent's wallet signs a Tempo payment at the dynamic price
+4. Worker runs inference via Workers AI (Llama, Mistral, etc.)
+5. Response includes `Payment-Receipt` + JWT cookie for 1-hour repeat access
+6. Every request is recorded — more agents = higher price
+
+## Pricing engine
+
+A Durable Object tracks demand per route with a sliding window and 5-tier piecewise pricing curve. EMA smoothing prevents price jitter.
 
 | Tier | Demand threshold | Multiplier | Price at $0.001 base |
 |------|----------------:|----------:|--------------------:|
@@ -14,19 +31,69 @@ A sliding window (60 seconds, ring buffer of 1-second buckets) counts incoming r
 | High | 1,000 | 5.0x | $0.005000 |
 | Surge | 5,000 | 10.0x | $0.010000 |
 
-Between tiers, the multiplier is linearly interpolated. At 125 requests (midpoint of normal-elevated), the multiplier is 2.0x, giving $0.002000. All thresholds, multipliers, and the base price are configurable.
+Between tiers, the multiplier is linearly interpolated. All thresholds, multipliers, and the base price are configurable per route.
+
+## Architecture
+
+```
+├── proxy/              # Cloudflare Worker (fork of cloudflare/mpp-proxy)
+│   ├── src/
+│   │   ├── index.ts              # Hono app, AI handlers, routing
+│   │   ├── auth.ts               # MPP payment middleware + surge pricing
+│   │   ├── pricing/
+│   │   │   ├── pricing-engine.ts # Sliding window, tiers, EMA smoothing
+│   │   │   └── engine.ts         # Durable Object wrapper + WebSocket
+│   │   └── api/routes.ts         # /__mpp/api/* pricing endpoints
+│   └── wrangler.jsonc            # DO, Workers AI, protected patterns
+├── simulator/          # Svelte 5 + Vite visualization dashboard
+│   └── src/
+│       ├── App.svelte            # Charts, scenarios, controls
+│       └── lib/                  # Canvas/SVG charts, traffic scenarios
+└── src/                # Standalone JS pricing engine (used by simulator)
+```
+
+## Endpoints
+
+| Endpoint | Auth | Description |
+|----------|------|-------------|
+| `POST /api/chat` | MPP payment | AI chat completion (dynamic pricing) |
+| `POST /api/embeddings` | MPP payment | Text embeddings (separate pricing tier) |
+| `GET /__mpp/api/prices` | Public | Current dynamic prices for all routes |
+| `GET /__mpp/api/status` | Public | Full status: demand, tier, config |
+| `GET /__mpp/api/ws/:pattern` | Public | WebSocket live pricing stream |
+| `GET /__mpp/health` | Public | Health check |
 
 ## Quick start
 
-Requires Node >= 18.
-
-### Server
+### Worker (proxy)
 
 ```bash
-pnpm install
-cp .env.example .env
-# Edit .env: set EVM_ADDRESS to your wallet
-pnpm start
+cd proxy
+npm install
+echo "JWT_SECRET=$(openssl rand -hex 32)" > .dev.vars
+echo "MPP_SECRET_KEY=$(openssl rand -hex 32)" >> .dev.vars
+npm run dev
+```
+
+```bash
+# Health check
+curl http://localhost:8787/__mpp/health
+
+# See dynamic prices
+curl http://localhost:8787/__mpp/api/prices
+
+# Trigger 402 with surge pricing
+curl -X POST http://localhost:8787/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"hello"}]}'
+
+# Watch prices climb
+for i in {1..50}; do
+  curl -s -o /dev/null -X POST http://localhost:8787/api/chat \
+    -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"x"}]}'
+done
+curl http://localhost:8787/__mpp/api/prices
 ```
 
 ### Simulator
@@ -37,91 +104,47 @@ pnpm install
 pnpm dev
 ```
 
-Opens a dashboard at `localhost:5173` with demand pattern controls (organic, spike, flood, decay), live time-series charts, pricing curve visualization, and adjustable tier thresholds.
+Dashboard at `localhost:5173` with traffic scenarios (Super Bowl, DDoS, Black Friday), real-time charts, pricing curve visualization, and revenue analysis.
 
-![Super Bowl Simulation](./superbowl-simulation.webp)
-
-The simulator runs its own `PricingEngine` instance with synthetic demand, it doesn't connect to the live server. Use `GET /pricing/status` for production monitoring.
-
-## The x402 integration point
-
-This is the key mechanism. Instead of a static price string, the x402 middleware receives a function:
-
-```js
-'GET /api/data': {
-  accepts: {
-    scheme: 'exact',
-    network: NETWORK,
-    payTo: EVM_ADDRESS,
-    price: () => pricingEngine.getFormattedPrice(),
-  },
-},
-```
-
-Every 402 response evaluates `getFormattedPrice()` at that instant. The client sees `maxAmountRequired` as the ceiling but pays the current dynamic price.
-
-Demand is recorded before the payment check, both initial requests (that get 402'd) and retries with payment count as demand signals.
-
-## API
-
-| Endpoint | Auth | Response |
-|----------|------|----------|
-| `GET /api/data` | x402 (402 -> pay -> 200) | Paywalled resource. Price reflects current demand. |
-| `GET /pricing/status` | None | Full snapshot: demand, raw/smoothed price, tier, config. |
-| `GET /health` | None | `{ ok: true, uptime }` |
-
-## Pricing engine API
-
-```js
-import { PricingEngine } from './src/pricing-engine.js';
-
-const engine = new PricingEngine(config);
-
-engine.recordRequest(count);     // Feed demand signal
-engine.getDemand();              // Requests currently in the sliding window
-engine.getCurrentPrice();        // EMA-smoothed price,  main integration API
-engine.getRawPrice();            // Unsmoothed instantaneous price
-engine.getFormattedPrice();      // "$0.001234"
-engine.getTierInfo();            // { level, name, threshold, multiplier, demand }
-engine.getStatus();              // Full snapshot (all of the above + config)
-engine.reset();                  // Clear demand history and EMA state
-```
-
-Constructor accepts an optional config object. Any omitted fields fall back to defaults in `src/config.js`.
-
-## Configuration
-
-**Pricing parameters** (`src/config.js`):
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `windowSize` | `60` | Sliding window duration in seconds |
-| `bucketSize` | `1` | Seconds per ring buffer bucket |
-| `basePrice` | `0.001` | Base price in dollars |
-| `smoothingAlpha` | `0.3` | EMA factor per second (0 = frozen, 1 = no smoothing) |
-| `tiers` | See table above | Array of `{ threshold, multiplier }` objects |
-
-**Environment variables** (`.env`):
-
-| Variable | Required | Default |
-|----------|----------|---------|
-| `EVM_ADDRESS` | Yes | — |
-| `FACILITATOR_URL` | No | `https://facilitator.x402.org` |
-| `PORT` | No | `4021` |
-| `NETWORK` | No | `eip155:84532` (Base Sepolia) |
-
-## Tests
+### End-to-end payment test
 
 ```bash
-pnpm test
+cd proxy
+PRIVATE_KEY=0x... npm run test:client
 ```
 
-26 tests across 5 suite for demand tracking, tier interpolation, EMA smoothing, output formats, and edge cases. Uses Node's built-in `node:test`, no test framework dependency.
+## Deploy
 
-## Current Limitations
+```bash
+cd proxy
+npx wrangler login
+npx wrangler deploy
+npx wrangler secret put MPP_SECRET_KEY
+npx wrangler secret put JWT_SECRET
+```
 
-- Single-node only: The sliding window lives in process memory. Multiple server instances behind a load balancer track demand independently. Distributed deployment needs a shared counter (Redis or similar).
+Live at: https://mpp-dynamic-pricing.0x471.workers.dev
 
-- No "gaming" protection: An actor who knows the tier boundaries can time requests to stay just below a threshold. Highly recommended to pair with rate limiting in production.
+## Why this wins
 
-- EMA lag is by design: After a demand spike, the smoothed price takes several seconds to converge to the raw price. After demand drops, it takes several seconds to decay. This prevents jitter but means the paid price lags the "true" instantaneous price.
+1. **On-theme**: MPP is for machine payments — machines paying for AI inference
+2. **Real utility**: AI agents with wallets can actually use this as an API gateway
+3. **All Cloudflare**: Worker + Durable Object + Workers AI = single platform, zero infra
+4. **Visual demo**: Simulator shows prices climbing as agents flood the endpoint
+5. **Surge pricing is novel**: No other MPP implementation does demand-based dynamic pricing
+
+## Stack
+
+- [Cloudflare Workers](https://workers.cloudflare.com) + [Durable Objects](https://developers.cloudflare.com/durable-objects/) + [Workers AI](https://developers.cloudflare.com/workers-ai/)
+- [MPP](https://mpp.dev) + [mppx SDK](https://mpp.dev/sdk/typescript) + [Tempo](https://tempo.xyz)
+- [Hono](https://hono.dev) (routing)
+- [Svelte 5](https://svelte.dev) + [Vite](https://vite.dev) (simulator)
+
+## Links
+
+- [MPP specification](https://mpp.dev)
+- [Tempo hackathon](https://hackathon.tempo.xyz/)
+- [Cloudflare MPP Proxy (upstream)](https://github.com/cloudflare/mpp-proxy)
+- [Our proxy fork](https://github.com/trionlabs/dynamic-pricing-mpp-proxy)
+
+Built by [trionlabs](https://trionlabs.dev)
