@@ -8,18 +8,18 @@
   <div class="doc-card">
     <div class="card-header">
       <div class="icon-badge">01</div>
-      <h3>The x402 Protocol</h3>
+      <h3>The MPP Protocol</h3>
     </div>
     <div class="card-body">
       <p class="summary">
-        HTTP 402 "Payment Required" enables machine-to-machine payments. 
-        Instead of subscriptions, clients pay <strong>per-request</strong>.
+        The Modular Payment Protocol (MPP) enables machine-to-machine payments.
+        AI agents pay <strong>per-request</strong> for inference via Tempo.
       </p>
       
       <div class="code-block">
         <div class="code-line"><span class="key">HTTP/1.1</span> <span class="val">402 Payment Required</span></div>
-        <div class="code-line"><span class="key">x-402-price:</span> <span class="lit">0.001000 USDC</span></div>
-        <div class="code-line"><span class="key">x-402-address:</span> <span class="lit">0x71C...9A</span></div>
+        <div class="code-line"><span class="key">WWW-Authenticate:</span> <span class="lit">Payment</span></div>
+        <div class="code-line"><span class="key">Payment-Method:</span> <span class="lit">tempo</span></div>
       </div>
 
       <div class="problem-box">

@@ -280,10 +280,10 @@
 <main>
   <header>
     <div class="header-left">
-      <div class="header-badge"><span>x402</span></div>
+      <div class="header-badge"><span>MPP</span></div>
       <div class="header-text">
-        <h1>x402 + Dynamic Pricing</h1>
-        <p class="subtitle">Pay-per-request, priced by demand</p>
+        <h1>MPP Dynamic Pricing</h1>
+        <p class="subtitle">Machine payments, priced by demand</p>
       </div>
     </div>
     <button class="theme-toggle" onclick={toggleTheme} title="Toggle theme">

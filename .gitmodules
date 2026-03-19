@@ -1,0 +1,3 @@
+[submodule "proxy"]
+	path = proxy
+	url = https://github.com/trionlabs/dynamic-pricing-mpp-proxy.git
